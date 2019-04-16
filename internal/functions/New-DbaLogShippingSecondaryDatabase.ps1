@@ -168,7 +168,7 @@ function New-DbaLogShippingSecondaryDatabase {
 
     # Check the restore mode
     if ($RestoreMode -notin 0, 1) {
-        $RestoreMode = switch ($RestoreMode) { "NoRecovery" { 0}  "Standby" { 1 } }
+        $RestoreMode = switch ($RestoreMode) { "NoRecovery" { 0 }  "Standby" { 1 } }
         Write-Message -Message "Setting restore mode to $RestoreMode." -Level Verbose
     }
 
@@ -194,9 +194,9 @@ function New-DbaLogShippingSecondaryDatabase {
     if ($RestoreMode -eq 0 -and $DisconnectUsers -ne 0) {
         if ($Force) {
             [int]$DisconnectUsers = 0
-            Write-Message -Message "Illegal combination of database restore mode $RestoreMode and disconnect users $DisconnectUsers. Setting it to $DisconnectUsers." -Level Warning
+            Write-Message -Message "Unsupported combination of database restore mode $RestoreMode and disconnect users $DisconnectUsers. Setting it to $DisconnectUsers." -Level Warning
         } else {
-            Stop-Function -Message "Illegal combination of database restore mode $RestoreMode and disconnect users $DisconnectUsers." -Target $SqlInstance -Continue
+            Stop-Function -Message "Unsupported combination of database restore mode $RestoreMode and disconnect users $DisconnectUsers." -Target $SqlInstance -Continue
         }
     }
 
@@ -258,12 +258,12 @@ function New-DbaLogShippingSecondaryDatabase {
                     ,@secondary_server = '$SqlInstance'
                     ,@secondary_database = '$SecondaryDatabase'
                     ,@secondary_id = '$($lsDetails.secondary_id)'
-                    ,@primary_server = '$($lsDetails.primary_server)'
-                    ,@primary_database = '$($lsDetails.primary_database)'
-                    ,@restore_threshold = $($lsDetails.restore_threshold)
-                    ,@threshold_alert = $([int]$lsDetails.threshold_alert)
-                    ,@threshold_alert_enabled = $([int]$lsDetails.threshold_alert_enabled)
-                    ,@history_retention_period = $([int]$lsDetails.history_retention_period)
+                    ,@primary_server = '$PrimaryServer'
+                    ,@primary_database = '$PrimaryDatabase'
+                    ,@restore_threshold = $RestoreThreshold
+                    ,@threshold_alert = $([int]$ThresholdAlert)
+                    ,@threshold_alert_enabled = $([int]$ThresholdAlertEnabled)
+                    ,@history_retention_period = $([int]$HistoryRetention)
                     ,@monitor_server = '$MonitorServer'
                     ,@monitor_server_security_mode = $MonitorServerSecurityMode "
 
