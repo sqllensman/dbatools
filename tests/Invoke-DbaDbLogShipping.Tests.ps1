@@ -14,13 +14,18 @@ Describe "$CommandName Unit Tests" -Tags "UnitTests" {
 }
 
 Describe "$commandname Integration Tests" -Tags "IntegrationTests" {
-    # This is a placeholder until we decide on sql2016/sql2017
     BeforeAll {
         $dbname = "dbatoolsci_logshipping"
+        $null = mkdir C:\temp\logshipping\backup
+        $null = New-DbaDatabase -SqlInstance $script:instance2 -Name $dbname
+    }
+    AfterAll {
+        Remove-DbaDatabase -Confirm:$false -SqlInstance $script:instance2, $script:instance3 -Database $dbname
+        Get-ChildItem -Recurse C:\temp\logshipping | Remove-Item -Force
     }
 
-    It -Skip "returns success" {
-        $results = Invoke-DbaDbLogShipping -SourceSqlInstance $script:instance2 -DestinationSqlInstance $script:instance -Database $dbname -BackupNetworkPath C:\temp -BackupLocalPath "C:\temp\logshipping\backup" -GenerateFullBackup -CompressBackup -SecondaryDatabaseSuffix "_LS" -Force
+    It "returns success" {
+        $results = Invoke-DbaDbLogShipping -SourceSqlInstance $script:instance2 -DestinationSqlInstance $script:instance3 -Database $dbname -BackupNetworkPath C:\temp -BackupLocalPath "C:\temp\logshipping\backup" -GenerateFullBackup -CompressBackup -SecondaryDatabaseSuffix "_LS" -Force
         $results.Status -eq 'Success' | Should Be $true
     }
 }
