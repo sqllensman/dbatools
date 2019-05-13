@@ -86,7 +86,7 @@ function New-DbaLogShippingSecondaryPrimary {
     param (
         [parameter(Mandatory)]
         [Alias("ServerInstance", "SqlServer")]
-        [object]$SqlInstance,
+        [DbaInstanceParameter]$SqlInstance,
         [PSCredential]$SqlCredential,
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -96,12 +96,12 @@ function New-DbaLogShippingSecondaryPrimary {
         [ValidateNotNullOrEmpty()]
         [string]$CopyJob,
         [int]$FileRetentionPeriod = 14420,
-        [string]$MonitorServer,
+        [DbaInstanceParameter]$MonitorServer,
         [PSCredential]$MonitorCredential,
         [Parameter(Mandatory)]
         [ValidateSet(0, "sqlserver", 1, "windows")]
         [object]$MonitorServerSecurityMode = 1,
-        [object]$PrimaryServer,
+        [DbaInstanceParameter]$PrimaryServer,
         [PSCredential]$PrimarySqlCredential,
         [object]$PrimaryDatabase,
         [Parameter(Mandatory)]
