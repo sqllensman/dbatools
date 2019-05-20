@@ -99,19 +99,19 @@ function Get-DbaDbFileGroup {
                     $db = $db | Where-Object { $Database -contains $_.Name }
                 }
                 $fileGroups = $db.Filegroups
-    
+
                 if (Test-Bound -ParameterName Filegroup) {
                     $fileGroups = $fileGroups | Where-Object { $Filegroup -contains $_.Name }
                 }
-    
+
                 foreach ($fg in $fileGroups) {
                     Write-Message -Level Verbose -Message "Processing filegroup $($fg.Name)"
                     $fg | Add-Member -Force -MemberType NoteProperty -Name ComputerName -Value $server.ComputerName
                     $fg | Add-Member -Force -MemberType NoteProperty -Name InstanceName -Value $server.ServiceName
                     $fg | Add-Member -Force -MemberType NoteProperty -Name SqlInstance -Value $server.DomainInstanceName
-    
+
                     $defaultprops = "ComputerName", "InstanceName", "SqlInstance", "Parent", "FileGroupType", "Name", "Size"
-    
+
                     Select-DefaultView -InputObject $fg -Property $defaultprops
                 }
             } else {

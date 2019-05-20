@@ -165,8 +165,8 @@ Function Invoke-DbaDbccCheckIntegrity {
         Results are returned as a recordset. Exclude all informational records
         Logs into the SQL Server with Windows credentials.
 
-    .EXAMPLE            
-        PS C:\> $fg = Get-DbaDbFileGroup -SqlInstance sql2014 
+    .EXAMPLE
+        PS C:\> $fg = Get-DbaDbFileGroup -SqlInstance sql2014
         PS C:\> $fg | Invoke-DbaDbccCheckIntegrity
 
         Creates a connection string that connects using alternative Windows credentials
