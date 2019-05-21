@@ -119,6 +119,4 @@ function Get-DbaDbFileGroup {
             }
         }
     }
-    end {
-    }
 }

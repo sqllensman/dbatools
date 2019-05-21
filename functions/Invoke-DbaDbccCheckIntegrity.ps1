@@ -174,12 +174,12 @@ Function Invoke-DbaDbccCheckIntegrity {
     #>
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     Param (
-        [parameter(ValueFromPipeline = $true)]
+        [parameter(ValueFromPipeline)]
         [DbaInstanceParameter[]]$SqlInstance,
         [PsCredential]$SqlCredential,
         [string[]]$Database,
         [parameter(ValueFromPipeline)]
-        [Object[]]$InputObject,
+        [object[]]$InputObject,
         [string[]]$Filegroup,
         [string[]]$TableName,
         [string]$IndexName,
@@ -288,7 +288,6 @@ Function Invoke-DbaDbccCheckIntegrity {
             $null = $stringBuilder.Append("TABLERESULTS")
             $optionInit = ", "
         }
-
     }
 
     PROCESS {
@@ -356,14 +355,13 @@ Function Invoke-DbaDbccCheckIntegrity {
                 $InputObject = Get-DbaDbTable -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Database $Database -Table $TableName  -EnableException
             } elseif ($Operation -eq 'CheckFileGroup') {
                 $typeName = 'Microsoft.SqlServer.Management.Smo.FileGroup'
-                $InputObject = Get-DbaDbFileGroup -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Database $Database -FileGroup $FileGroup   -EnableException
+                $InputObject = Get-DbaDbFileGroup -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Database $Database -FileGroup $FileGroup -EnableException
             } else {
                 Write-Message -Message "SqlInstance passed" -Level Verbose
                 $typeName = 'Microsoft.SqlServer.Management.Smo.Database'
                 $InputObject += Get-DbaDatabase -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Database $Database
             }   # Process Data from SqlInstance
         }
-
 
         if (($Operation -eq 'CheckTable') -and ($typeName = 'Microsoft.SqlServer.Management.Smo.Table')) {
             Write-Message -Message "Processing CheckTable" -Level Verbose
@@ -728,7 +726,6 @@ Function Invoke-DbaDbccCheckIntegrity {
                 $dbName = $db.Name
                 $results = $null
 
-
                 if ($db.IsAccessible -eq $false) {
                     Stop-Function -Message "The database $db on server $instance is not accessible. Skipping database." -Continue
                 }
@@ -854,7 +851,6 @@ Function Invoke-DbaDbccCheckIntegrity {
                                 $refDbId = $row.RefDbId
                                 $refPruId = $row.RefPruId
                             }
-
 
                             [PSCustomObject]@{
                                 ComputerName = $server.ComputerName

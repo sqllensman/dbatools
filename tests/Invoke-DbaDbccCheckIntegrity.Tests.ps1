@@ -12,8 +12,16 @@ Describe "$CommandName Unit Tests" -Tag 'UnitTests' {
         }
     }
 }
-<#
-    Integration test should appear below and are custom to the command you are writing.
-    Read https://github.com/sqlcollaborative/dbatools/blob/development/contributing.md#tests
-    for more guidence.
-#>
+
+Describe "$CommandName Integration Tests" -Tags "IntegrationTests" {
+    Context "Testing DBCC CheckDB" {
+        BeforeAll {
+            $database = "dbatoolsci_dbcc_$(Get-Random)"
+            $server = Connect-DbaInstance -SqlInstance $script:instance2
+            $server.Query("CREATE DATABASE $database")
+        }
+        AfterAll {
+            Remove-DbaDatabase -SqlInstance $script:instance2 -Database $database -Confirm:$false
+        }
+    }
+}
