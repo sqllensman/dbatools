@@ -243,7 +243,7 @@ Function Invoke-DbaDbccCheckIntegrity {
 
         if (Test-Bound -ParameterName MaxDOP) {
             $null = $stringBuilder.Append($optionInit)
-            $null = $stringBuilder.Append("MAXPOP = $MaxDOP")
+            $null = $stringBuilder.Append("MAXDOP = $MaxDOP")
             $optionInit = ", "
         }
 
@@ -383,7 +383,7 @@ Function Invoke-DbaDbccCheckIntegrity {
                     try {
                         $results = Invoke-DbaQuery -SqlInstance $server -Database $dbName  -Query $query -MessagesToOutput -EnableException
                     } catch {
-                        Stop-Function -Message "Failed to execute query: $query against the datbase $dbName on Server  $server" -ErrorRecord $_
+                        Stop-Function -Message "Failed to execute query: $query against the database $dbName on Server  $server" -ErrorRecord $_
                         return
                     }
                 } else {
@@ -563,7 +563,7 @@ Function Invoke-DbaDbccCheckIntegrity {
                     try {
                         $results = Invoke-DbaQuery -SqlInstance $server -Database $dbName  -Query $query -MessagesToOutput -EnableException
                     } catch {
-                        Stop-Function -Message "Failed to execute query: $query against the datbase $dbName on Server  $server" -ErrorRecord $_
+                        Stop-Function -Message "Failed to execute query: $query against the database $dbName on Server  $server" -ErrorRecord $_
                         return
                     }
                 } else {
@@ -748,7 +748,7 @@ Function Invoke-DbaDbccCheckIntegrity {
                     $results = 'No Operation performed.'
                 }
                 $endTime = Get-Date
-                $duration = NEW-TIMESPAN –Start $startTime –End $endTime
+                $duration = NEW-TIMESPAN -Start $startTime -End $endTime
 
                 if (($null -eq $results) -or ($results.GetType().Name -eq 'String') ) {
                     [PSCustomObject]@{
