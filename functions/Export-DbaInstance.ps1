@@ -227,7 +227,7 @@ function Export-DbaInstance {
                 $fileCounter++
                 Write-Message -Level Verbose -Message "Exporting SQL Server Configuration"
                 Write-ProgressHelper -StepNumber ($stepCounter++) -Message "Exporting SQL Server Configuration"
-                Export-DbaSpConfigure -SqlInstance $server -FilePath "$Path\$fileCounter-sp_configure.sql"
+                Export-DbaSpConfigure -SqlInstance $server -FilePath "$Path\$fileCounter-sp_configure.sql" -Append:$Append -BatchSeparator $BatchSeparator -NoPrefix:$NoPrefix
                 if (-not (Test-Path "$Path\$fileCounter-sp_configure.sql")) {
                     $fileCounter--
                 }
