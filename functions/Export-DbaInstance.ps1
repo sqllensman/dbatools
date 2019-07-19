@@ -501,7 +501,7 @@ function Export-DbaInstance {
                 }
                 Write-Message -Level Verbose -Message "Exporting Extended Events"
                 Write-ProgressHelper -StepNumber ($stepCounter++) -Message "Exporting Extended Events"
-                $null = Get-DbaXESession -SqlInstance $server | Export-DbaScript -FilePath $filePath -Append:$Append -BatchSeparator 'GO'
+                $null = Get-DbaXESession -SqlInstance $server | Export-DbaScript -FilePath $filePath -Append:$Append -BatchSeparator $BatchSeparator
                 Get-ChildItem -ErrorAction Ignore -Path $filePath
                 if (-not (Test-Path $filePath)) {
                     $fileCounter--
