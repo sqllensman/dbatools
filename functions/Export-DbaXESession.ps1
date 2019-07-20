@@ -149,52 +149,20 @@ function Export-DbaXESession {
             $InputObject += Get-DbaXESession -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Session $XeSession
         }
 
-        foreach ($instance in $SqlInstance) {
-            try {
-                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $sqlcredential -MinimumVersion 9
-            } catch {
-                Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
-            }
 
-            $scriptPath = Get-ExportFilePath -Path $PSBoundParameters.Path -FilePath $PSBoundParameters.FilePath -Type sql -ServerName $instance
-            $outsql += "USE master"
+        foreach ($session in $InputObject) {
+            $server = $session.Parent
+            $serverName = $server.Name.Replace('\', '$')
 
+            $scriptPath = Get-ExportFilePath -Path $PSBoundParameters.Path -FilePath $PSBoundParameters.FilePath -Type sql -ServerName $serverName
+            
             if ($NoPrefix) {
                 $prefix = $null
             } else {
                 $prefix = "/*`n`tCreated by $executingUser using dbatools $commandName for objects on $($instance) at $(Get-Date -Format (Get-DbatoolsConfigValue -FullName 'Formatting.DateTime'))`n`tSee https://dbatools.io/$commandName for more information`n*/"
             }
 
-            $ShowAdvancedOptions = $server.Configuration.ShowAdvancedOptions.ConfigValue
-            $outsql += "EXEC sp_configure 'show advanced options' , 1;"
-            $outsql += "RECONFIGURE WITH OVERRIDE"
-
-            if ($ShowAdvancedOptions -eq 0) {
-                try {
-                    $server.Configuration.ShowAdvancedOptions.ConfigValue = $true
-                    $server.Configuration.Alter($true)
-                } catch {
-                    Stop-Function -Message "Can't set 'show advanced options' to 1 on instance $instance" -ErrorRecord $_ -Continue
-                }
-            }
-
-            foreach ($sourceprop in $server.Configuration.Properties) {
-                $displayname = $sourceprop.DisplayName
-                $configvalue = $sourceprop.ConfigValue
-                $outsql += "EXEC sp_configure '$displayname' , $configvalue;"
-            }
-
-            if ($ShowAdvancedOptions -eq 0) {
-                $outsql += "EXEC sp_configure 'show advanced options' , 0;"
-                $outsql += "RECONFIGURE WITH OVERRIDE"
-                try {
-                    $server.Configuration.ShowAdvancedOptions.ConfigValue = $false
-                    $server.Configuration.Alter($true)
-                } catch {
-                    Stop-Function -Message "Can't set 'show advanced options' to 0 on instance $instance" -ErrorRecord $_ -Continue
-                }
-            }
-
+            $outsql = $session.ScriptCreate().GetScript()s
             if ($BatchSeparator) {
                 $sql = $outsql -join "`r`n$BatchSeparator`r`n"
                 #add the final GO
