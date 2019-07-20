@@ -1,11 +1,10 @@
 function Export-DbaXESession {
     <#
     .SYNOPSIS
-        Exports advanced sp_configure global configuration options to sql file.
+        Exports Extened Events creation script to a T-SQL file or console.
 
     .DESCRIPTION
-        Exports advanced sp_configure global configuration options to sql file.
-        Will require SysAdmin rights if needs to set 'show advanced options'
+        Exports script to create Extended Events Session to sql file  or console.
 
     .PARAMETER SqlInstance
         The target SQL Server instance or instances. This can be a collection and receive pipeline input.
@@ -52,10 +51,10 @@ function Export-DbaXESession {
         If this switch is used, the scripts will not include prefix information containing creator and datetime.
 
     .PARAMETER NoClobber
-        Do not overwrite file
+        Do not overwrite file. Only required if FilePath is specified
 
     .PARAMETER Append
-        Append to file
+        Append to file. Only required if FilePath is specified
 
     .PARAMETER EnableException
         By default, when something goes wrong we try to catch it, interpret it and give you a friendly warning message.
@@ -74,7 +73,7 @@ function Export-DbaXESession {
         https://dbatools.io/Export-DbaXESession
 
     .INPUTS
-        A DbaInstanceParameter representing an array of SQL Server instances.
+        A DbaInstanceParameter representing an array of SQL Server instances or output from Get-DbaXESession
 
     .OUTPUTS
         Creates a new file for each SQL Server Instance
@@ -82,40 +81,41 @@ function Export-DbaXESession {
     .EXAMPLE
         PS C:\> Export-DbaXESession -SqlInstance sourceserver -Passthru
 
-        Exports the SPConfigure settings on sourceserver to the console
+        Exports a script to create all Extended Events Sessions on sourceserver to the console
         Will include prefix information containing creator and datetime. and uses the default value for BatchSeparator value from configuration Formatting.BatchSeparator
 
     .EXAMPLE
         PS C:\> Export-DbaXESession -SqlInstance sourceserver
 
-        Exports the SPConfigure settings on sourceserver. As no Path was defined - automatically determines filename based on the Path.DbatoolsExport configuration setting, current time and server name like Servername-YYYYMMDDhhmmss-sp_configure.sql
+        Exports a script to create all Extended Events Sessions on sourceserver. As no Path was defined - automatically determines filename based on the Path.DbatoolsExport configuration setting, current time and server name like Servername-YYYYMMDDhhmmss-sp_configure.sql
         Will include prefix information containing creator and datetime. and uses the default value for BatchSeparator value from configuration Formatting.BatchSeparator
 
     .EXAMPLE
         PS C:\> Export-DbaXESession -SqlInstance sourceserver -FilePath C:\temp
 
-        Exports the SPConfigure settings on sourceserver to the directory C:\temp using the default name format of Servername-YYYYMMDDhhmmss-sp_configure.sql
+        Exports a script to create all Extended Events Sessions on sourceserver to the directory C:\temp using the default name format of Servername-YYYYMMDDhhmmss-sp_configure.sql
         Will include prefix information containing creator and datetime. and uses the default value for BatchSeparator value from configuration Formatting.BatchSeparator
 
     .EXAMPLE
         PS C:\> $cred = Get-Credential sqladmin
-        PS C:\> Export-DbaXESession -SqlInstance sourceserver -SqlCredential $cred -FilePath C:\temp\sp_configure.sql -BatchSeparator "" -NoPrefix -NoClobber
+        PS C:\> Export-DbaXESession -SqlInstance sourceserver -SqlCredential $cred -FilePath C:\temp\EEvents.sql -BatchSeparator "" -NoPrefix -NoClobber
 
-        Exports the SPConfigure settings on sourceserver to the file C:\temp\sp_configure.sql.
+        Exports a script to create all Extended Events Sessions on sourceserver to the file C:\temp\EEvents.sql.
         Will exclude prefix information containing creator and datetime and does not include a BatchSeparator
         Will not overwrite file if it already exists
 
     .EXAMPLE
         PS C:\> 'Server1', 'Server2' | Export-DbaXESession -Path C:\temp
 
-        Exports the SPConfigure settings for Server1 and Server2 using pipeline. As more than 1 Server adds prefix of Servername and date to the file name and saves to file like  C:\temp\Servername-MMDDYYYYhhmmss-configure.sql
+        Exports a script to create all Extended Events Sessions for Server1 and Server2 using pipeline. As more than 1 Server adds prefix of Servername and date to the file name and saves to file like  C:\temp\Servername-MMDDYYYYhhmmss-configure.sql
 
     #>
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(ValueFromPipeline)]
         [DbaInstanceParameter[]]$SqlInstance,
         [PSCredential]$SqlCredential,
+        [Parameter(ValueFromPipeline)]
         [Microsoft.SqlServer.Management.XEvent.Session[]]$InputObject,
         [string[]]$XeSession,
         [string[]]$ExcludeXeSession,
@@ -133,7 +133,8 @@ function Export-DbaXESession {
     )
     begin {
         $null = Test-ExportDirectory -Path $Path
-        $outsql = @()
+        $instanceArray = @()
+        $xesessionCollection = New-Object System.Collections.ArrayList
         $executingUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
         $commandName = $MyInvocation.MyCommand.Name
     }
@@ -146,29 +147,38 @@ function Export-DbaXESession {
         }
 
         if ($SqlInstance) {
-            $InputObject += Get-DbaXESession -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Session $XeSession
+            $InputObject = Get-DbaXESession -SqlInstance $SqlInstance -SqlCredential $SqlCredential -Session $XeSession
         }
-
 
         foreach ($session in $InputObject) {
             $server = $session.Parent
             $serverName = $server.Name.Replace('\', '$')
 
-            $scriptPath = Get-ExportFilePath -Path $PSBoundParameters.Path -FilePath $PSBoundParameters.FilePath -Type sql -ServerName $serverName
+            $outsql = $session.ScriptCreate().GetScript()
+
+            $xesessionObject = [PSCustomObject]@{
+                Name     = $session.Name
+                Instance = $serverName
+                Sql      = $outsql[0]
+            }
+            $xesessionCollection.Add($xesessionObject) | Out-Null
+        }
+    }
+    end {
+        foreach ($xesessionObject in $xesessionCollection) {
             
             if ($NoPrefix) {
                 $prefix = $null
             } else {
-                $prefix = "/*`n`tCreated by $executingUser using dbatools $commandName for objects on $($instance) at $(Get-Date -Format (Get-DbatoolsConfigValue -FullName 'Formatting.DateTime'))`n`tSee https://dbatools.io/$commandName for more information`n*/"
+                $prefix = "/*`n`tCreated by $executingUser using dbatools $commandName for objects on $($xesessionObject.Instance) at $(Get-Date -Format (Get-DbatoolsConfigValue -FullName 'Formatting.DateTime'))`n`tSee https://dbatools.io/$commandName for more information`n*/"
             }
 
-            $outsql = $session.ScriptCreate().GetScript()s
             if ($BatchSeparator) {
-                $sql = $outsql -join "`r`n$BatchSeparator`r`n"
+                $sql = $xesessionObject.SQL -join "`r`n$BatchSeparator`r`n"
                 #add the final GO
                 $sql += "`r`n$BatchSeparator"
             } else {
-                $sql = $outsql -join "`r`n"
+                $sql = $xesessionObject.SQL
             }
 
             if ($Passthru) {
@@ -176,15 +186,23 @@ function Export-DbaXESession {
                     $sql = "$prefix`r`n$sql"
                 }
                 $sql
+            } elseif ($Path -Or $FilePath) {
+                if ($instanceArray -notcontains $($xesessionObject.Instance)) {
+                    if ($null -ne $prefix) {
+                        $sql = "$prefix`r`n$sql"
+                    }
+                    $scriptPath = Get-ExportFilePath -Path $PSBoundParameters.Path -FilePath $PSBoundParameters.FilePath -Type sql -ServerName $xesessionObject.Instance
+                    if ((Test-Path -Path $scriptPath) -and $NoClobber) {
+                        Stop-Function -Message "File already exists. If you want to overwrite it remove the -NoClobber parameter. If you want to append data, please Use -Append parameter." -Target $scriptPath -Continue
+                    }c
+                    $sql | Out-File -Encoding $Encoding -FilePath $scriptPath -Append:$Append -NoClobber:$NoClobber
+                    $instanceArray += $xesessionObject.Instance
+                    Get-ChildItem $scriptPath
+                } else {
+                    $sql | Out-File -Encoding $Encoding -FilePath $scriptPath -Append
+                }
             } else {
-                if ($null -ne $prefix) {
-                    $sql = "$prefix`r`n$sql"
-                }
-                if ((Test-Path -Path $scriptPath) -and $NoClobber) {
-                    Stop-Function -Message "File already exists. If you want to overwrite it remove the -NoClobber parameter. If you want to append data, please Use -Append parameter." -Target $scriptPath -Continue
-                }
-                $sql | Out-File -Encoding $Encoding -LiteralPath $scriptPath -Append:$Append -NoClobber:$NoClobber
-                Get-ChildItem -Path $scriptPath
+                $sql
             }
         }
     }

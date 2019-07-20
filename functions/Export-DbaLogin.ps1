@@ -527,6 +527,9 @@ function Export-DbaLogin {
                         $sql = $prefix + $sql
                     }
                     $scriptPath = Get-ExportFilePath -Path $PSBoundParameters.Path -FilePath $PSBoundParameters.FilePath -Type sql -ServerName $login.Instance
+                    if ((Test-Path -Path $scriptPath) -and $NoClobber) {
+                        Stop-Function -Message "File already exists. If you want to overwrite it remove the -NoClobber parameter. If you want to append data, please Use -Append parameter." -Target $scriptPath -Continue
+                    }
                     $sql | Out-File -Encoding $Encoding -FilePath $scriptPath -Append:$Append -NoClobber:$NoClobber
                     $instanceArray += $login.Instance
                     Get-ChildItem $scriptPath
