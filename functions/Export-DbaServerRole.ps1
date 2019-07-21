@@ -1,7 +1,7 @@
 function Export-DbaServerRole {
     <#
     .SYNOPSIS
-        Exports database roles to a T-SQL file. Export includes Role creation, object permissions and Schema ownership.
+        Exports server roles to a T-SQL file. Export includes Role creation, object permissions and Schema ownership.
 
     .DESCRIPTION
         This command is based off of John Eisbrener's post "Fully Script out a MSSQL Database Role"
@@ -22,17 +22,14 @@ function Export-DbaServerRole {
      .PARAMETER ScriptingOptionsObject
         An SMO Scripting Object that can be used to customize the output - see New-DbaScriptingOption
 
-    .PARAMETER Database
-        The database(s) to process. Options for this list are auto-populated from the server. If unspecified, all databases will be processed.
+    .PARAMETER ServerRole
+        Server-Level role to filter results to that role only.
 
-    .PARAMETER Role
-        The Role(s) to process. If unspecified, all Roles will be processed.
-
-    .PARAMETER ExcludeRole
-        The Role(s) to exclude.
+    .PARAMETER ExcludeServerRole
+        Server-Level role to exclude from results.
 
     .PARAMETER ExcludeFixedRole
-        Excludes all members of fixed roles.
+        Filter the fixed server-level roles. Only applies to SQL Server 2017 that supports creation of server-level roles.
 
     .PARAMETER IncludeRoleMember
         Include scripting of role members in script
@@ -91,52 +88,52 @@ function Export-DbaServerRole {
         License: MIT https://opensource.org/licenses/MIT
 
     .LINK
-        https://dbatools.io/Export-DbaDbRole
+        https://dbatools.io/Export-DbaServerRole
 
     .EXAMPLE
-        PS C:\> Export-DbaDbRole -SqlInstance sql2005 -Path C:\temp
+        PS C:\> Export-DbaServerRole -SqlInstance sql2005 -Path C:\temp
 
         Exports the Database Roles for all  for SQL Server "sql2005" and writes them to the file "C:\temp\sql2005-logins.sql"
 
     .EXAMPLE
-        PS C:\> Export-DbaDbRole -SqlInstance sqlserver2014a -ExcludeLogin realcajun -SqlCredential $scred -Path C:\temp\logins.sql -Append
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -ExcludeLogin realcajun -SqlCredential $scred -Path C:\temp\logins.sql -Append
 
         Authenticates to sqlserver2014a using SQL Authentication. Exports all logins except for realcajun to C:\temp\logins.sql, and appends to the file if it exists. If not, the file will be created.
 
     .EXAMPLE
-        PS C:\> Export-DbaDbRole -SqlInstance sqlserver2014a -Login realcajun, netnerds -Path C:\temp\logins.sql
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -Login realcajun, netnerds -Path C:\temp\logins.sql
 
         Exports ONLY logins netnerds and realcajun FROM sqlserver2014a to the file  C:\temp\logins.sql
 
     .EXAMPLE
-        PS C:\> Export-DbaDbRole -SqlInstance sqlserver2014a -Login realcajun, netnerds -Database HR, Accounting
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -Login realcajun, netnerds -Database HR, Accounting
 
         Exports ONLY logins netnerds and realcajun FROM sqlserver2014a with the permissions on databases HR and Accounting
 
     .EXAMPLE
-        PS C:\> Get-DbaDatabase -SqlInstance sqlserver2014a -Database HR, Accounting | Export-DbaDbRole
+        PS C:\> Get-DbaDatabase -SqlInstance sqlserver2014a -Database HR, Accounting | Export-DbaServerRole
 
         Exports ONLY logins FROM sqlserver2014a with permissions on databases HR and Accounting
 
     .EXAMPLE
-        PS C:\> Export-DbaDbRole -SqlInstance sqlserver2008 -Login realcajun, netnerds -Path C:\temp\login.sql -ExcludeGoBatchSeparator
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2008 -Login realcajun, netnerds -Path C:\temp\login.sql -ExcludeGoBatchSeparator
 
         Exports ONLY logins netnerds and realcajun FROM sqlserver2008 server, to the C:\temp\login.sql file without the 'GO' batch separator.
 
     .EXAMPLE
-        PS C:\> Export-DbaDbRole -SqlInstance sqlserver2008 -Login realcajun -Path C:\temp\users.sql -DestinationVersion SQLServer2016
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2008 -Login realcajun -Path C:\temp\users.sql -DestinationVersion SQLServer2016
 
         Exports login realcajun from sqlserver2008 to the file C:\temp\users.sql with syntax to run on SQL Server 2016
 
     .EXAMPLE
-        PS C:\> Get-DbaDatabase -SqlInstance sqlserver2008 -Login realcajun | Export-DbaDbRole
+        PS C:\> Get-DbaServerRole -SqlInstance sqlserver2008 | Export-DbaServerRole
 
-        Exports login realcajun from sqlserver2008
+        Exports server roles from sqlserver2008
 
     .EXAMPLE
-        PS C:\> Get-DbaDbRole -SqlInstance sqlserver2008 -ExcludeFixedRole | Export-DbaDbRole
+        PS C:\> Get-DbaServerRole -SqlInstance sqlserver2008 -ExcludeFixedRole -ExcludeServerRole Public | Export-DbaServerRole -IncludeRoleMember
 
-        Exports all roles from all databases on sqlserver2008, exludes all roles marked as as FixedRole
+        Exports server roles from sqlserver2008, exludes all roles marked as as FixedRole and Public role. Includes RoleMembers
 
     #>
     [CmdletBinding()]
@@ -147,9 +144,8 @@ function Export-DbaServerRole {
         [Parameter(ValueFromPipeline)]
         [object[]]$InputObject,
         [Microsoft.SqlServer.Management.Smo.ScriptingOptions]$ScriptingOptionsObject,
-        [object[]]$Database,
-        [object[]]$Role,
-        [object[]]$ExcludeRole,
+        [string[]]$ServerRole,
+        [string[]]$ExcludeServerRole,
         [switch]$ExcludeFixedRole,
         [switch]$IncludeRoleMember,
         [string]$Path = (Get-DbatoolsConfigValue -FullName 'Path.DbatoolsExport'),
@@ -174,73 +170,60 @@ function Export-DbaServerRole {
         $executingUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
         $commandName = $MyInvocation.MyCommand.Name
 
-        $roleSQL = "SELECT
-                        N'<#RoleName#>' as RoleName,
-                        CASE dp.state
-                            WHEN 'D' THEN 'DENY'
-                            WHEN 'G' THEN 'GRANT'
-                            WHEN 'R' THEN 'REVOKE'
-                            WHEN 'W' THEN 'GRANT'
-                        END as GrantState,
-                        dp.permission_name as Permission,
-                        CASE dp.class
-                            WHEN 0 THEN ''
-                            WHEN 1 THEN --table or column subset on the table
-                                CASE WHEN dp.major_id < 0 THEN '[sys].[' + OBJECT_NAME(dp.major_id) + ']'
-                                    ELSE '[' + (SELECT SCHEMA_NAME(schema_id) + '].[' + name FROM sys.objects WHERE object_id = dp.major_id) + ']'
-                                END + -- optionally concatenate column names
-                                    CASE WHEN MAX(dp.minor_id) > 0 THEN ' (['
-                                        + REPLACE((SELECT name + '], [' FROM sys.columns
-                                                WHERE object_id = dp.major_id
-                                                AND column_id IN (SELECT minor_id FROM sys.database_permissions WHERE major_id = dp.major_id AND USER_NAME(grantee_principal_id) = N'<#RoleName#>')
-                                        FOR XML PATH('')) + '])', ', []', '')
-                                        ELSE ''
-                                    END
-                            WHEN 3 THEN 'SCHEMA::[' + SCHEMA_NAME(dp.major_id) + ']'
-                            WHEN 4 THEN '' + (SELECT RIGHT(type_desc, 4) + '::[' + name FROM sys.database_principals WHERE principal_id = dp.major_id) + ']'
-                            WHEN 5 THEN 'ASSEMBLY::[' + (SELECT name FROM sys.assemblies WHERE assembly_id = dp.major_id) + ']'
-                            WHEN 6 THEN 'TYPE::[' + (SELECT name FROM sys.types WHERE user_type_id = dp.major_id) + ']'
-                            WHEN 10 THEN 'XML SCHEMA COLLECTION::[' + (SELECT SCHEMA_NAME(schema_id) + '.' + name FROM sys.xml_schema_collections WHERE xml_collection_id = dp.major_id) + ']'
-                            WHEN 15 THEN 'MESSAGE TYPE::[' + (SELECT name FROM sys.service_message_types WHERE message_type_id = dp.major_id) + ']'
-                            WHEN 16 THEN 'CONTRACT::[' + (SELECT name FROM sys.service_contracts WHERE service_contract_id = dp.major_id) + ']'
-                            WHEN 17 THEN 'SERVICE::[' + (SELECT name FROM sys.services WHERE service_id = dp.major_id) + ']'
-                            WHEN 18 THEN 'REMOTE SERVICE BINDING::[' + (SELECT name FROM sys.remote_service_bindings WHERE remote_service_binding_id = dp.major_id) + ']'
-                            WHEN 19 THEN 'ROUTE::[' + (SELECT name FROM sys.routes WHERE route_id = dp.major_id) + ']'
-                            WHEN 23 THEN 'FULLTEXT CATALOG::[' + (SELECT name FROM sys.fulltext_catalogs WHERE fulltext_catalog_id = dp.major_id) + ']'
-                            WHEN 24 THEN 'SYMMETRIC KEY::[' + (SELECT name FROM sys.symmetric_keys WHERE symmetric_key_id = dp.major_id) + ']'
-                            WHEN 25 THEN 'CERTIFICATE::[' + (SELECT name FROM sys.certificates WHERE certificate_id = dp.major_id) + ']'
-                            WHEN 26 THEN 'ASYMMETRIC KEY::[' + (SELECT name FROM sys.asymmetric_keys WHERE asymmetric_key_id = dp.major_id) + ']'
-                        END COLLATE DATABASE_DEFAULT  as Type,
-                        CASE dp.state WHEN 'W' THEN ' WITH GRANT OPTION' ELSE '' END as GrantType
-                    FROM sys.database_permissions dp
-                    WHERE USER_NAME(dp.grantee_principal_id) = N'<#RoleName#>'
-                    GROUP BY dp.state, dp.major_id, dp.permission_name, dp.class
-                    UNION ALL
-                    SELECT
-                        N'<#RoleName#>' as RoleName,
-                        'ALTER' as GrantState,
-                        'AUTHORIZATION' as permission_name,
-                        'SCHEMA::['+s.[name]+']' as Type,
-                        '' as GrantType
-                    from sys.schemas s
-                    join sys.sysusers u on s.principal_id = u.[uid]
-                    where u.[name] = N'<#RoleName#>'"
-
-        $userSQL = "SELECT roles.name as RoleName, users.name as Member
-                    FROM sys.database_principals users
-                    INNER JOIN sys.database_role_members link
-                        ON link.member_principal_id = users.principal_id
-                    INNER JOIN sys.database_principals roles
-                        ON roles.principal_id = link.role_principal_id
-                    WHERE roles.name = N'<#RoleName#>'"
+        $roleSQL = "SELECT 
+                    CASE SPerm.state
+                        WHEN 'D' THEN 'DENY'
+                        WHEN 'G' THEN 'GRANT'
+                        WHEN 'R' THEN 'REVOKE'
+                        WHEN 'W' THEN 'GRANT'
+                    END as GrantState,
+                    sPerm.permission_name as Permission,
+                    Case 
+                        WHEN SPerm.class = 100 THEN ''
+                        WHEN SPerm.class = 101 AND sp2.type = 'S' THEN 'ON LOGIN::' + QuoteName(sp2.name)
+                        WHEN SPerm.class = 101 AND sp2.type = 'R' THEN 'ON SERVER ROLE::' + QuoteName(sp2.name)
+                        WHEN SPerm.class = 101 AND sp2.type = 'U' THEN 'ON LOGIN::' + QuoteName(sp2.name)
+                        WHEN SPerm.class = 105 THEN 'ON ENDPOINT::' + QuoteName(ep.name)
+                        WHEN SPerm.class = 108 THEN 'ON AVAILABILITY GROUP::' + QUOTENAME(ag.name)
+                        ELSE ''
+                    END as OnClause,
+                    QuoteName(SP.name) as RoleName,
+                    Case	
+                        WHEN SPerm.state = 'W' THEN 'WITH GRANT OPTION AS ' + QUOTENAME(gsp.Name)
+                        ELSE ''
+                    END as GrantOption
+                FROM sys.server_permissions SPerm 
+                INNER JOIN sys.server_principals SP 
+                    ON SP.principal_id = SPerm.grantee_principal_id 
+                INNER JOIN sys.server_principals gsp 
+                    ON gsp.principal_id = SPerm.grantor_principal_id 
+                LEFT JOIN sys.endpoints ep
+                    ON ep.endpoint_id = SPerm.major_id
+                    AND SPerm.class = 105  
+                LEFT JOIN sys.server_principals sp2
+                    ON sp2.principal_id = SPerm.major_id
+                    AND SPerm.class = 101  
+                LEFT JOIN 
+                (
+                    Select 
+                        ar.replica_metadata_id,
+                        ag.name 
+                    from sys.availability_groups ag
+                    INNER JOIN sys.availability_replicas ar
+                        ON ag.group_id = ar.group_id
+                ) ag
+                    ON ag.replica_metadata_id = SPerm.major_id
+                    AND SPerm.class = 108
+                where sp.type='R' 
+                and sp.name=N'<#RoleName#>'"
 
         if (Test-Bound -Not -ParameterName ScriptingOptionsObject) {
             $ScriptingOptionsObject = New-DbaScriptingOption
             $ScriptingOptionsObject.AllowSystemObjects = $false
-            $ScriptingOptionsObject.IncludeDatabaseRoleMemberships = $true
             $ScriptingOptionsObject.ContinueScriptingOnError = $false
             $ScriptingOptionsObject.IncludeDatabaseContext = $true
-            $ScriptingOptionsObject.IncludeIfNotExists = $false
+            $ScriptingOptionsObject.IncludeIfNotExists = $true
+            $ScriptingOptionsObject.ScriptOwner = $true
         }
 
         if ($ScriptingOptionsObject.NoCommandTerminator) {
@@ -256,7 +239,7 @@ function Export-DbaServerRole {
         }
 
         if (-not $InputObject -and -not $SqlInstance) {
-            Stop-Function -Message "You must pipe in a role, database, or server or specify a SqlInstance"
+            Stop-Function -Message "You must pipe in a ServerRole or server or specify a SqlInstance"
             return
         }
 
@@ -269,68 +252,54 @@ function Export-DbaServerRole {
             switch ($inputType) {
                 'Sqlcollaborative.Dbatools.Parameter.DbaInstanceParameter' {
                     Write-Message -Level Verbose -Message "Processing DbaInstanceParameter through InputObject"
-                    $databaseRoles = Get-DbaDBRole -SqlInstance $input -SqlCredential $sqlcredential -Database $Database -ExcludeDatabase $ExcludeDatabase -Role $Role -ExcludeRole $ExcludeRole -ExcludeFixedRole:$ExcludeFixedRole
+                    $serverRoles = Get-DbaServerRole -SqlInstance $input -SqlCredential $sqlcredential  -ServerRole $ServerRole -ExcludeServerRole $ExcludeServerRole -ExcludeFixedRole:$ExcludeFixedRole
                 }
                 'Microsoft.SqlServer.Management.Smo.Server' {
                     Write-Message -Level Verbose -Message "Processing Server through InputObject"
-                    $databaseRoles = Get-DbaDBRole -SqlInstance $input -SqlCredential $sqlcredential -Database $Database -ExcludeDatabase $ExcludeDatabase -Role $Role -ExcludeRole $ExcludeRole -ExcludeFixedRole:$ExcludeFixedRole
+                    $serverRoles = Get-DbaServerRole -SqlInstance $input -SqlCredential $sqlcredential -ServerRole $ServerRole -ExcludeServerRole $ExcludeServerRole -ExcludeFixedRole:$ExcludeFixedRole
                 }
-                'Microsoft.SqlServer.Management.Smo.Database' {
-                    Write-Message -Level Verbose -Message "Processing Database through InputObject"
-                    $databaseRoles = $input | Get-DbaDBRole -ExcludeDatabase $ExcludeDatabase -Role $Role -ExcludeRole $ExcludeRole -ExcludeFixedRole:$ExcludeFixedRole
-                }
-                'Microsoft.SqlServer.Management.Smo.DatabaseRole' {
-                    Write-Message -Level Verbose -Message "Processing DatabaseRole through InputObject"
-                    $databaseRoles = $input
+                'Microsoft.SqlServer.Management.Smo.ServerRole' {
+                    Write-Message -Level Verbose -Message "Processing ServerRole through InputObject"
+                    $serverRoles = $input
                 }
                 default {
-                    Stop-Function -Message "InputObject is not a server, database, or login."
+                    Stop-Function -Message "InputObject is not a server or serverrole."
                     return
                 }
             }
-            foreach ($dbRole in $databaseRoles) {
-                $server = $dbRole.Parent.Parent
 
-                $outsql += $dbRole.Script($ScriptingOptionsObject)
-                
-                $query = $roleSQL.Replace('<#RoleName#>', "$($dbRole.Name)")
-                $rolePermissions = Invoke-DbaQuery -SqlInstance $server.Name -Database $dbRole.Database  -Query $query -EnableException
+            foreach ($role in $serverRoles) {
+                $outsql += $role.Script($ScriptingOptionsObject)
+
+                $query = $roleSQL.Replace('<#RoleName#>', "$($role.Name)")
+                $rolePermissions = Invoke-DbaQuery -SqlInstance $role.SqlInstance  -Query $query -EnableException 
 
                 foreach ($rolePermission in $rolePermissions) {
                     $script = $rolePermission.GrantState + " " + $rolePermission.Permission
-                    if ($rolePermission.Type) {
-                        $script += " ON " + $rolePermission.Type
+                    if ($rolePermission.OnClause) {
+                        $script += " " + $rolePermission.OnClause
                     }
                     if ($rolePermission.RoleName) {
-                        $script += " TO [" + $rolePermission.RoleName + "]"
+                        $script += " TO " + $rolePermission.RoleName
                     }
-                    if ($rolePermission.GrantType) {
-                        $script += " WITH GRANT OPTION" + $commandTerminator
+                    if ($rolePermission.GrantOption) {
+                        $script += " " + $rolePermission.GrantOption + $commandTerminator   
                     } else {
-                        $script += $commandTerminator
-                    }
-                    $outsql += "$script"
+                        $script += $commandTerminator  
+                    } 
+                    $outsql += "$script" 
                 }
 
                 if ($IncludeRoleMember) {
-                    $query = $userSQL.Replace('<#RoleName#>', "$($dbRole.Name)")
-                    $roleUsers = Invoke-DbaQuery -SqlInstance $dbRole.SqlInstance -Database $dbRole.Database  -Query $query -EnableException
-
-                    foreach ($roleUser in $roleUsers) {
-                        $script = 'ALTER ROLE [' + $roleUser.RoleName + "] ADD MEMBER [" + $roleUser.Member + "]" + $commandTerminator
-                        $outsql += "$script"
-
-                        if (($server.VersionMajor -lt 11 -and [string]::IsNullOrEmpty($destinationVersion)) -or ($DestinationVersion -in "SQLServer2000", "SQLServer2005", "SQLServer2008/2008R2")) {
-                            $script += "EXEC sys.sp_addrolemember @rolename=N'$roleName', @membername=N'$userName'"
-                        } else {
-                            $script = 'ALTER ROLE [' + $roleUser.RoleName + "] ADD MEMBER [" + $roleUser.Member + "]" + $commandTerminator
-                        }
+                    foreach ($roleUser in $role.Login) {
+                        $script = 'ALTER SERVER ROLE [' + $role.Role + "] ADD MEMBER [" + $roleUser + "]"  + $commandTerminator
+                        $outsql += "$script"  
                     }
                 }
+
                 $roleObject = [PSCustomObject]@{
-                    Name     = $dbRole.Name
-                    Instance = $dbRole.SqlInstance
-                    Database = $dbRole.Database
+                    Name     = $role.Name
+                    Instance = $role.SqlInstance
                     Sql      = $outsql
                 }
                 $roleCollection.Add($roleObject) | Out-Null
@@ -342,11 +311,8 @@ function Export-DbaServerRole {
         if (Test-FunctionInterrupt) { return }
 
         $timeNow = $(Get-Date -Format (Get-DbatoolsConfigValue -FullName 'Formatting.DateTime'))
-        foreach ($dbRole in $roleCollection) {
-            $instanceName = $dbRole.Instance
-            $databaseName = $dbRole.Database
-
-            $outputFileName = $instanceName.Replace('\', '$') + '-' + $databaseName.Replace('\', '$')
+        foreach ($role in $roleCollection) {
+            $instanceName = $role.Instance
 
             if ($NoPrefix) {
                 $prefix = $null
@@ -355,11 +321,11 @@ function Export-DbaServerRole {
             }
 
             if ($BatchSeparator) {
-                $sql = $dbRole.SQL -join "`r`n$BatchSeparator`r`n"
+                $sql = $role.SQL -join "`r`n$BatchSeparator`r`n"
                 #add the final GO
                 $sql += "`r`n$BatchSeparator"
             } else {
-                $sql = $dbRole.SQL
+                $sql = $role.SQL
             }
 
             if ($Passthru) {
@@ -368,6 +334,7 @@ function Export-DbaServerRole {
                 }
                 $sql
             } elseif ($Path -Or $FilePath) {
+                $outputFileName = $instanceName.Replace('\', '$') 
                 if ($outputFileArray -notcontains $outputFileName) {
                     Write-Message -Level Verbose -Message "New File $outputFileName "
                     if ($null -ne $prefix) {
