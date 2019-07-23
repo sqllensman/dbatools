@@ -91,44 +91,34 @@ function Export-DbaServerRole {
         https://dbatools.io/Export-DbaServerRole
 
     .EXAMPLE
+        PS C:\> Export-DbaServerRole -SqlInstance sql2005
+
+        Exports the Server Roles for SQL Server "sql2005" and writes them to the path defined in the ConfigValue 'Path.DbatoolsExport' using a a default name pattern of ServerName-YYYYMMDDhhmmss-serverrole. Uses BatchSeparator defined by Config 'Formatting.BatchSeparator'
+
+    .EXAMPLE
         PS C:\> Export-DbaServerRole -SqlInstance sql2005 -Path C:\temp
 
-        Exports the Database Roles for all  for SQL Server "sql2005" and writes them to the file "C:\temp\sql2005-logins.sql"
+        Exports the Server Roles for SQL Server "sql2005" and writes them to the path "C:\temp" using a a default name pattern of ServerName-YYYYMMDDhhmmss-serverrole. Uses BatchSeparator defined by Config 'Formatting.BatchSeparator'
 
     .EXAMPLE
-        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -ExcludeLogin realcajun -SqlCredential $scred -Path C:\temp\logins.sql -Append
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -FilePath C:\temp\ServerRoles.sql
 
-        Authenticates to sqlserver2014a using SQL Authentication. Exports all logins except for realcajun to C:\temp\logins.sql, and appends to the file if it exists. If not, the file will be created.
-
-    .EXAMPLE
-        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -Login realcajun, netnerds -Path C:\temp\logins.sql
-
-        Exports ONLY logins netnerds and realcajun FROM sqlserver2014a to the file  C:\temp\logins.sql
+        Exports the Server Roles for SQL Server sqlserver2014a to the file  C:\temp\ServerRoles.sql. Overwrites file if exists
 
     .EXAMPLE
-        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -Login realcajun, netnerds -Database HR, Accounting
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2014a -ServerRole SchemaReader -Passthru
 
-        Exports ONLY logins netnerds and realcajun FROM sqlserver2014a with the permissions on databases HR and Accounting
-
-    .EXAMPLE
-        PS C:\> Get-DbaDatabase -SqlInstance sqlserver2014a -Database HR, Accounting | Export-DbaServerRole
-
-        Exports ONLY logins FROM sqlserver2014a with permissions on databases HR and Accounting
+        Exports ONLY ServerRole SchemaReader FROM sqlserver2014a and writes script to console
 
     .EXAMPLE
-        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2008 -Login realcajun, netnerds -Path C:\temp\login.sql -ExcludeGoBatchSeparator
+        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2008 -ExcludeFixedRole -ExcludeServerRole Public -IncludeRoleMember -FilePath C:\temp\ServerRoles.sql -Append -BatchSeparator ''
 
-        Exports ONLY logins netnerds and realcajun FROM sqlserver2008 server, to the C:\temp\login.sql file without the 'GO' batch separator.
-
-    .EXAMPLE
-        PS C:\> Export-DbaServerRole -SqlInstance sqlserver2008 -Login realcajun -Path C:\temp\users.sql -DestinationVersion SQLServer2016
-
-        Exports login realcajun from sqlserver2008 to the file C:\temp\users.sql with syntax to run on SQL Server 2016
+        Exports server roles from sqlserver2008, exludes all roles marked as as FixedRole and Public role. Includes RoleMembers and writes to file C:\temp\ServerRoles.sql, appending to file if it exits. Does not include a BatchSeparator
 
     .EXAMPLE
-        PS C:\> Get-DbaServerRole -SqlInstance sqlserver2008 | Export-DbaServerRole
+        PS C:\> Get-DbaServerRole -SqlInstance sqlserver2012, sqlserver2014  | Export-DbaServerRole
 
-        Exports server roles from sqlserver2008
+        Exports server roles from sqlserver2012, sqlserver2014 and writes them to the path defined in the ConfigValue 'Path.DbatoolsExport' using a a default name pattern of ServerName-YYYYMMDDhhmmss-serverrole
 
     .EXAMPLE
         PS C:\> Get-DbaServerRole -SqlInstance sqlserver2008 -ExcludeFixedRole -ExcludeServerRole Public | Export-DbaServerRole -IncludeRoleMember
@@ -170,7 +160,7 @@ function Export-DbaServerRole {
         $executingUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
         $commandName = $MyInvocation.MyCommand.Name
 
-        $roleSQL = "SELECT 
+        $roleSQL = "SELECT
                     CASE SPerm.state
                         WHEN 'D' THEN 'DENY'
                         WHEN 'G' THEN 'GRANT'
@@ -178,7 +168,7 @@ function Export-DbaServerRole {
                         WHEN 'W' THEN 'GRANT'
                     END as GrantState,
                     sPerm.permission_name as Permission,
-                    Case 
+                    Case
                         WHEN SPerm.class = 100 THEN ''
                         WHEN SPerm.class = 101 AND sp2.type = 'S' THEN 'ON LOGIN::' + QuoteName(sp2.name)
                         WHEN SPerm.class = 101 AND sp2.type = 'R' THEN 'ON SERVER ROLE::' + QuoteName(sp2.name)
@@ -188,33 +178,33 @@ function Export-DbaServerRole {
                         ELSE ''
                     END as OnClause,
                     QuoteName(SP.name) as RoleName,
-                    Case	
+                    Case
                         WHEN SPerm.state = 'W' THEN 'WITH GRANT OPTION AS ' + QUOTENAME(gsp.Name)
                         ELSE ''
                     END as GrantOption
-                FROM sys.server_permissions SPerm 
-                INNER JOIN sys.server_principals SP 
-                    ON SP.principal_id = SPerm.grantee_principal_id 
-                INNER JOIN sys.server_principals gsp 
-                    ON gsp.principal_id = SPerm.grantor_principal_id 
+                FROM sys.server_permissions SPerm
+                INNER JOIN sys.server_principals SP
+                    ON SP.principal_id = SPerm.grantee_principal_id
+                INNER JOIN sys.server_principals gsp
+                    ON gsp.principal_id = SPerm.grantor_principal_id
                 LEFT JOIN sys.endpoints ep
                     ON ep.endpoint_id = SPerm.major_id
-                    AND SPerm.class = 105  
+                    AND SPerm.class = 105
                 LEFT JOIN sys.server_principals sp2
                     ON sp2.principal_id = SPerm.major_id
-                    AND SPerm.class = 101  
-                LEFT JOIN 
+                    AND SPerm.class = 101
+                LEFT JOIN
                 (
-                    Select 
+                    Select
                         ar.replica_metadata_id,
-                        ag.name 
+                        ag.name
                     from sys.availability_groups ag
                     INNER JOIN sys.availability_replicas ar
                         ON ag.group_id = ar.group_id
                 ) ag
                     ON ag.replica_metadata_id = SPerm.major_id
                     AND SPerm.class = 108
-                where sp.type='R' 
+                where sp.type='R'
                 and sp.name=N'<#RoleName#>'"
 
         if (Test-Bound -Not -ParameterName ScriptingOptionsObject) {
@@ -272,7 +262,7 @@ function Export-DbaServerRole {
                 $outsql += $role.Script($ScriptingOptionsObject)
 
                 $query = $roleSQL.Replace('<#RoleName#>', "$($role.Name)")
-                $rolePermissions = Invoke-DbaQuery -SqlInstance $role.SqlInstance  -Query $query -EnableException 
+                $rolePermissions = Invoke-DbaQuery -SqlInstance $role.SqlInstance  -Query $query -EnableException
 
                 foreach ($rolePermission in $rolePermissions) {
                     $script = $rolePermission.GrantState + " " + $rolePermission.Permission
@@ -283,17 +273,17 @@ function Export-DbaServerRole {
                         $script += " TO " + $rolePermission.RoleName
                     }
                     if ($rolePermission.GrantOption) {
-                        $script += " " + $rolePermission.GrantOption + $commandTerminator   
+                        $script += " " + $rolePermission.GrantOption + $commandTerminator
                     } else {
-                        $script += $commandTerminator  
-                    } 
-                    $outsql += "$script" 
+                        $script += $commandTerminator
+                    }
+                    $outsql += "$script"
                 }
 
                 if ($IncludeRoleMember) {
                     foreach ($roleUser in $role.Login) {
-                        $script = 'ALTER SERVER ROLE [' + $role.Role + "] ADD MEMBER [" + $roleUser + "]"  + $commandTerminator
-                        $outsql += "$script"  
+                        $script = 'ALTER SERVER ROLE [' + $role.Role + "] ADD MEMBER [" + $roleUser + "]" + $commandTerminator
+                        $outsql += "$script"
                     }
                 }
 
@@ -334,7 +324,7 @@ function Export-DbaServerRole {
                 }
                 $sql
             } elseif ($Path -Or $FilePath) {
-                $outputFileName = $instanceName.Replace('\', '$') 
+                $outputFileName = $instanceName.Replace('\', '$')
                 if ($outputFileArray -notcontains $outputFileName) {
                     Write-Message -Level Verbose -Message "New File $outputFileName "
                     if ($null -ne $prefix) {
