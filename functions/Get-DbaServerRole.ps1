@@ -5,9 +5,10 @@ function Get-DbaServerRole {
 
     .DESCRIPTION
         Gets the list of server-level roles for SQL Server instance.
+        Prior to SQL Server 2012 only fixed server-level roles existed
 
     .PARAMETER SqlInstance
-        The target SQL Server instance or instances. Server version must be SQL Server version 2005 or higher.
+        The target SQL Server instance or instances.
 
     .PARAMETER SqlCredential
         Login to the target instance using alternative credentials. Windows and SQL Authentication supported. Accepts credential objects (Get-Credential)
@@ -19,7 +20,7 @@ function Get-DbaServerRole {
         Server-Level role to exclude from results.
 
     .PARAMETER ExcludeFixedRole
-        Filter the fixed server-level roles. Only applies to SQL Server 2017 that supports creation of server-level roles.
+        Filter the fixed server-level roles. Only useful for SQL Server 2012+ that supports creation of user defined server-level roles.
 
     .PARAMETER EnableException
         By default, when something goes wrong we try to catch it, interpret it and give you a friendly warning message. This avoids overwhelming you with "sea of red" exceptions, but is inconvenient because it basically disables advanced scripting. Using this switch turns this "nice by default" feature off and enables you to catch exceptions with your own try/catch.
@@ -60,7 +61,7 @@ function Get-DbaServerRole {
     process {
         foreach ($instance in $SqlInstance) {
             try {
-                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential -MinimumVersion 9
+                $server = Connect-SqlInstance -SqlInstance $instance -SqlCredential $SqlCredential
             } catch {
                 Stop-Function -Message "Error occurred while establishing connection to $instance" -Category ConnectionError -ErrorRecord $_ -Target $instance -Continue
             }
