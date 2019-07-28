@@ -26,7 +26,7 @@ Describe "$commandname Integration Tests" -Tags "IntegrationTests" {
     Context "Check if output file was created" {
         $null = Export-DbaXeSession -SqlInstance $script:instance2 -FilePath $outputFile
         It "Exports results to one sql file" {
-                (Get-ChildItem $outputFile).Count | Should Be 1
+            (Get-ChildItem $outputFile).Count | Should Be 1
         }
         It "Exported file is bigger than 0" {
             (Get-ChildItem $outputFile).Length | Should BeGreaterThan 0
@@ -36,7 +36,7 @@ Describe "$commandname Integration Tests" -Tags "IntegrationTests" {
     Context "Check if session parameter is honored" {
         $null = Export-DbaXeSession -SqlInstance $script:instance2 -FilePath $outputFile -Session system_health
         It "Exports results to one sql file" {
-                (Get-ChildItem $outputFile).Count | Should Be 1
+            (Get-ChildItem $outputFile).Count | Should Be 1
         }
         It "Exported file is bigger than 0" {
             (Get-ChildItem $outputFile).Length | Should BeGreaterThan 0
@@ -46,7 +46,7 @@ Describe "$commandname Integration Tests" -Tags "IntegrationTests" {
     Context "Check if supports Pipeline input" {
         $null = Get-DbaXeSession -SqlInstance $script:instance2 -Session system_health | Export-DbaXeSession -FilePath $outputFile
         It "Exports results to one sql file" {
-                (Get-ChildItem $outputFile).Count | Should Be 1
+            (Get-ChildItem $outputFile).Count | Should Be 1
         }
         It "Exported file is bigger than 0" {
             (Get-ChildItem $outputFile).Length | Should BeGreaterThan 0
