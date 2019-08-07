@@ -292,7 +292,7 @@ function Export-DbaDbRole {
                 $server = $dbRole.Parent.Parent
 
                 $outsql += $dbRole.Script($ScriptingOptionsObject)
-                
+
                 $query = $roleSQL.Replace('<#RoleName#>', "$($dbRole.Name)")
                 $rolePermissions = Invoke-DbaQuery -SqlInstance $server.Name -Database $dbRole.Database  -Query $query -EnableException
 

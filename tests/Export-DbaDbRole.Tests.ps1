@@ -24,7 +24,7 @@ Describe "$commandname Integration Tests" -Tags "IntegrationTests" {
 
     Context "Check if output file was created" {
 
-        $null = Export-DbaDbRole -SqlInstance $script:instance2 -Database msdb -FilePath $outputFile 
+        $null = Export-DbaDbRole -SqlInstance $script:instance2 -Database msdb -FilePath $outputFile
         It "Exports results to one sql file" {
             (Get-ChildItem $outputFile).Count | Should Be 1
         }
