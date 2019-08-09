@@ -7,6 +7,8 @@ function Export-DbaServerRole {
         Exports Server roles to a T-SQL file. Export includes Role creation, object permissions and Role Members
 
         Applies mostly to SQL Server 2012 or Higher when user defined Server roles were added but can be used on earlier versions to get role members.
+        This command is an extension of John Eisbrener's post "Fully Script out a MSSQL Database Role"
+        Reference:  https://dbaeyes.wordpress.com/2013/04/19/fully-script-out-a-mssql-database-role/
 
     .PARAMETER SqlInstance
         The target SQL Server instance or instances. SQL Server 2000 and above supported.
