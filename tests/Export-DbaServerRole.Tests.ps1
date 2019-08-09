@@ -16,7 +16,7 @@ Describe "$CommandName Unit Tests" -Tag 'UnitTests' {
 Describe "$commandname Integration Tests" -Tags "IntegrationTests" {
     BeforeAll {
         $AltExportPath = "$env:USERPROFILE\Documents"
-        $outputFile  = "$AltExportPath\Dbatoolsci_ServerRole.sql"
+        $outputFile = "$AltExportPath\Dbatoolsci_ServerRole.sql"
         try {
             $random = Get-Random
             $login1 = "dbatoolsci_exportdbaserverrole_login1$random"
